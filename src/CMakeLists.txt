@@ -394,6 +394,7 @@ list(APPEND SOURCE_FILES
         displayapp/screens/PassKey.cpp
         displayapp/screens/Error.cpp
         displayapp/screens/Alarm.cpp
+        displayapp/screens/TennisScoreTracker.cpp
         displayapp/screens/Styles.cpp
         displayapp/screens/WeatherSymbols.cpp
         displayapp/Colors.cpp
@@ -612,6 +613,7 @@ set(INCLUDE_FILES
         displayapp/screens/Timer.h
         displayapp/screens/Dice.h
         displayapp/screens/Alarm.h
+        displayapp/screens/TennisScoreTracker.h
         displayapp/Colors.h
         displayapp/widgets/Counter.h
         displayapp/widgets/PageIndicator.h
