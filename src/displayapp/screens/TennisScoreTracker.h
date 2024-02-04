@@ -17,6 +17,7 @@ namespace Pinetime {
             public:
                 TennisScoreTracker(Pinetime::Applications::DisplayApp* app);
                 ~TennisScoreTracker() override;
+                void Refresh() override;
                 bool OnTouchEvent(TouchEvents event) override;
             private:
                 std::unique_ptr<Screen> createHomeScreen();
@@ -25,6 +26,8 @@ namespace Pinetime {
                 ScreenList<2> screens;
 
                 std::unique_ptr<TennisMatchModel> model;
+
+                lv_obj_t* scoreLabel;
             };
         }
 
