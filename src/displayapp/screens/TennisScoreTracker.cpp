@@ -87,12 +87,31 @@ private:
         }
     }
 
+    bool isSetFinished(const unsigned char scoreA, const unsigned char scoreB) {
+        return (scoreA == 6 && 6 - scoreB >= 2) ||
+               (scoreB == 6 && 6 - scoreA >= 2) ||
+               (scoreA == 7 && scoreB == 6) ||
+               (scoreB == 7 && scoreA == 6);
+
+               // missing tie break rules for now
+    }
+
     void computeGame(PlayerScore& winner, PlayerScore& loser) {
-        winner.sets[0]++;
+        for (auto i = 0; i < winner.sets.size(); i++) {
+            if (isSetFinished(winner.sets[i], loser.sets[i])) {
+                continue;
+            }
+            winner.sets[i]++;
+            break;
+        }
     }
 
     void computeSet(PlayerScore& winner, PlayerScore& loser) {
 
+    }
+
+    void undo() {
+        events.pop_back();
     }
 
     std::vector<Event> events;
@@ -124,16 +143,21 @@ namespace Pinetime::Applications::Screens {
     }
 
     bool TennisScoreTracker::OnTouchEvent(TouchEvents event) {
-        if (event == TouchEvents::SwipeUp) {
+        if (event == TouchEvents::Tap) {
             model->registerPointForMe();
             Refresh();
             return true;
-        } else if (event == TouchEvents::SwipeDown) {
+        } else if (event == TouchEvents::DoubleTap) {
             model->registerPointForOpp();
             Refresh();
             return true;
         } else if (event == TouchEvents::LongTap) {
-            //lv_label_set_text_static(scoreLabel, "long tap");
+            model->undo();
+            Refresh();
+            return true;
+        } else if (event == TouchEvents::SwipeUp) {
+            // avoid closing the app for now
+            return true;
         }
 
         return screens.OnTouchEvent(event);
@@ -143,12 +167,17 @@ namespace Pinetime::Applications::Screens {
         if (scoreLabel && model) {
             const auto summary = model->getMatchSummary();
             lv_label_set_text_fmt(scoreLabel, "game %d - %d\n"
-                                              "set %d - %d\n"
-                                              "match %d - %d",
+                                              "set #1 %d - %d\n"
+                                              "set #2 %d - %d\n"
+                                              "set #3 %d - %d\n",
                                               (int) summary.myScore.currentGame,
                                               (int) summary.oppScore.currentGame,
                                               (int) summary.myScore.sets[0],
                                               (int) summary.oppScore.sets[0],
+                                              (int) summary.myScore.sets[1],
+                                              (int) summary.oppScore.sets[1],
+                                              (int) summary.myScore.sets[2],
+                                              (int) summary.oppScore.sets[2],
                                               0, 0);
         }
     }
@@ -163,10 +192,9 @@ namespace Pinetime::Applications::Screens {
 
     std::unique_ptr<Screen> TennisScoreTracker::createMatchScreen() {
         scoreLabel = lv_label_create(lv_scr_act(), nullptr);
-        const auto summary = model->getMatchSummary();
-        lv_label_set_text_fmt(scoreLabel, "%d - %d", (int)summary.myScore.currentGame, (int)summary.oppScore.currentGame);
-        lv_label_set_align(scoreLabel, LV_LABEL_ALIGN_CENTER);
-        lv_obj_align(scoreLabel, lv_scr_act(), LV_ALIGN_CENTER, 0, 0);
+        lv_label_set_text_static(label, "game 0 - 0");
+        lv_label_set_align(scoreLabel, LV_LABEL_ALIGN_LEFT);
+        lv_obj_align(scoreLabel, lv_scr_act(), LV_ALIGN_IN_TOP_LEFT, 0, 0);
         return std::make_unique<Screens::Label>(0, 5, scoreLabel);
     }
 }
