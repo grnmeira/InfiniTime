@@ -165,8 +165,8 @@ namespace Pinetime::Applications::Screens {
                                            Controllers::FS& fs)
     : motorController(motorController),
     dateTimeController(dateTimeController),
-    motorTimer(this, TimerCallback),
     fs(fs),
+    motorTimer(this, TimerCallback),
     model(std::make_unique<TennisMatchModel>())
     {
         const auto mainContainer = lv_cont_create(lv_scr_act(), nullptr);
