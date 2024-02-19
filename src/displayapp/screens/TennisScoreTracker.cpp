@@ -136,7 +136,7 @@ private:
     }
 
     void computeGame(PlayerScore& winner, PlayerScore& loser) {
-        for (auto i = 0; i < winner.sets.size(); i++) {
+        for (size_t i = 0; i < winner.sets.size(); i++) {
             if (isSetFinished(winner.sets[i], loser.sets[i])) {
                 continue;
             }
@@ -146,6 +146,8 @@ private:
     }
 
     void computeSet(PlayerScore& winner, PlayerScore& loser) {
+        (void)winner;
+        (void)loser;
     }
 
     std::vector<Event> events;
@@ -158,10 +160,8 @@ namespace Pinetime::Applications::Screens {
         obj->Vibrate();
     }
 
-    TennisScoreTracker::TennisScoreTracker(Pinetime::Applications::DisplayApp* app,
-                                           Controllers::MotorController& motorController,
+    TennisScoreTracker::TennisScoreTracker(Controllers::MotorController& motorController,
                                            Controllers::DateTime& dateTimeController,
-                                           Controllers::Timer& timerController,
                                            Controllers::FS& fs)
     : motorController(motorController),
     dateTimeController(dateTimeController),

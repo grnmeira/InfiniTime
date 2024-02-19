@@ -15,10 +15,8 @@ namespace Pinetime {
         namespace Screens {
             class TennisScoreTracker : public Screen {
             public:
-                TennisScoreTracker(Pinetime::Applications::DisplayApp* app,
-                                   Controllers::MotorController& motorController,
+                TennisScoreTracker(Controllers::MotorController& motorController,
                                    Controllers::DateTime& dateTimeController,
-                                   Controllers::Timer& timer,
                                    Controllers::FS& fs);
                 ~TennisScoreTracker() override;
                 void Vibrate();
@@ -44,10 +42,8 @@ namespace Pinetime {
             static constexpr Apps app = Apps::TennisScoreTracker;
             static constexpr const char* icon = Screens::Symbols::eye;
             static Screens::Screen* Create(AppControllers& controllers) {
-                return new Screens::TennisScoreTracker(controllers.displayApp,
-                                                       controllers.motorController,
+                return new Screens::TennisScoreTracker(controllers.motorController,
                                                        controllers.dateTimeController,
-                                                       controllers.timer,
                                                        controllers.filesystem);
             };
         };
