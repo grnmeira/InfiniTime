@@ -84,7 +84,9 @@ public:
         }
     }
 
-    TennisMatchModel() {}
+    TennisMatchModel() {
+        summary.sets[0].isActive = true;
+    }
 private:
     void computePoint(const Player scoringPlayer) {
         if (summary.sets[summary.currentSet].isTieBreakActive) {
