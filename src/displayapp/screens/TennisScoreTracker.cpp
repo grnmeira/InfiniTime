@@ -6,13 +6,15 @@
 
 class TennisMatchModel {
 public:
+    enum class Player {
+        PLAYER1,
+        PLAYER2
+    };
+
     struct Event {
         enum class Type {
-            POINT_ME,
-            POINT_OPP,
-            GAME,
-            SET,
-            MATCH
+            POINT_P1,
+            POINT_P2,
         };
         Type type;
     };
@@ -25,15 +27,20 @@ public:
         AD
     };
 
-    struct PlayerScore {
-        GameScore currentGame{};
-        std::array<unsigned char, 5> sets{};
-        std::array<unsigned char, 5> tieBreaks{};
+    struct Set {
+        bool isActive{false};
+        unsigned char scoreP1{0};
+        unsigned char scoreP2{0};
+        bool isTieBreakActive{false};
+        unsigned char tieBreakScoreP1{0};
+        unsigned char tieBreakScoreP2{0};
     };
 
     struct MatchSummary {
-        PlayerScore myScore;
-        PlayerScore oppScore;
+        GameScore currentGameP1{GameScore::LOVE};
+        GameScore currentGameP2{GameScore::LOVE};
+        unsigned char currentSet{0};
+        std::array<Set, 5> sets{};
     };
 
     struct TieBreakConfig {
@@ -48,29 +55,15 @@ public:
         TieBreakConfig tieBreakConfig;
     };
 
-    void registerPointForMe() {
-        events.emplace_back(Event{ Event::Type::POINT_ME });
-    }
-
-    void registerPointForOpp() {
-        events.emplace_back(Event{ Event::Type::POINT_OPP });
+    void registerPoint(const Player scoringPlayer) {
+        computePoint(scoringPlayer);
     }
 
     void undo() {
-        if (!events.empty()) {
-            events.pop_back();
-        }
+        // TODO
     }
 
     MatchSummary getMatchSummary() {
-        MatchSummary summary;
-        for (const auto& event : events) {
-            if (event.type == Event::Type::POINT_ME) {
-                computePoint(summary.myScore, summary.oppScore);
-            } else if (event.type == Event::Type::POINT_OPP) {
-                computePoint(summary.oppScore, summary.myScore);
-            }
-        }
         return summary;
     }
 
@@ -90,68 +83,145 @@ public:
                 return "N/A";
         }
     }
+
+    TennisMatchModel() {}
 private:
-    void computePoint(PlayerScore& winner, PlayerScore& loser) {
-        switch (winner.currentGame) {
+    void computePoint(const Player scoringPlayer) {
+        if (summary.sets[summary.currentSet].isTieBreakActive) {
+            computeTieBreakPoint(scoringPlayer);
+        } else {
+            computeGamePoint(scoringPlayer);
+        }
+    }
+
+    void computeGamePoint(const Player scoringPlayer) {
+        auto& winnerGameScore = scoringPlayer == Player::PLAYER1 ? summary.currentGameP1 : summary.currentGameP2;
+        auto& loserGameScore = scoringPlayer == Player::PLAYER1 ? summary.currentGameP2 : summary.currentGameP1;
+
+        switch (winnerGameScore) {
             case GameScore::LOVE:
-                if (loser.currentGame == GameScore::AD)
+                if (loserGameScore == GameScore::AD)
                 {
-                    winner.currentGame = GameScore::AD;
-                    loser.currentGame = GameScore::LOVE;
+                    winnerGameScore = GameScore::AD;
+                    loserGameScore = GameScore::LOVE;
                 } else {
-                    winner.currentGame = GameScore::S_15;
+                    winnerGameScore = GameScore::S_15;
                 }
                 break;
             case GameScore::S_15:
-                winner.currentGame = GameScore::S_30;
+                winnerGameScore = GameScore::S_30;
                 break;
             case GameScore::S_30:
-                winner.currentGame = GameScore::S_40;
+                winnerGameScore = GameScore::S_40;
                 break;
             case GameScore::S_40:
-                if (loser.currentGame == GameScore::S_40) {
-                    winner.currentGame = GameScore::AD;
-                    loser.currentGame = GameScore::LOVE;
+                if (loserGameScore == GameScore::S_40) {
+                    winnerGameScore = GameScore::AD;
+                    loserGameScore = GameScore::LOVE;
                 } else {
-                    winner.currentGame = GameScore::LOVE;
-                    loser.currentGame = GameScore::LOVE;
-                    computeGame(winner, loser);
+                    winnerGameScore = GameScore::LOVE;
+                    loserGameScore = GameScore::LOVE;
+                    computeGame(scoringPlayer);
                 }
                 break;
             case GameScore::AD:
-                winner.currentGame = GameScore::LOVE;
-                loser.currentGame = GameScore::LOVE;
-                computeGame(winner, loser);
+                winnerGameScore = GameScore::LOVE;
+                loserGameScore = GameScore::LOVE;
+                computeGame(scoringPlayer);
                 break;
+        }
+    }
+
+    void computeTieBreakPoint(const Player scoringPlayer) {
+        if (scoringPlayer == Player::PLAYER1) {
+            summary.sets[summary.currentSet].tieBreakScoreP1++;
+        } else {
+            summary.sets[summary.currentSet].tieBreakScoreP2++;
+        }
+
+        if (isTieBreakFinished(summary.sets[summary.currentSet].tieBreakScoreP1,
+                               summary.sets[summary.currentSet].tieBreakScoreP2)) {
+            if (summary.currentSet < summary.sets.size()) {
+                summary.currentSet++;
+                summary.sets[summary.currentSet].isActive = true;
+            } else {
+                // Match is finished
+            }
         }
     }
 
     bool isSetFinished(const unsigned char scoreA, const unsigned char scoreB) {
         return (scoreA == 6 && 6 - scoreB >= 2) ||
                (scoreB == 6 && 6 - scoreA >= 2) ||
-               (scoreA == 7 && scoreB == 6) ||
-               (scoreB == 7 && scoreA == 6);
-
-               // missing tie break rules for now
+               (scoreA == 7 && scoreB == 5) ||
+               (scoreB == 7 && scoreA == 5);
     }
 
-    void computeGame(PlayerScore& winner, PlayerScore& loser) {
-        for (size_t i = 0; i < winner.sets.size(); i++) {
-            if (isSetFinished(winner.sets[i], loser.sets[i])) {
-                continue;
+    bool isTieBreakSet(const unsigned char scoreA, const unsigned char scoreB) {
+        return (scoreA == 6 && scoreB == 6) ||
+               (scoreB == 6 && scoreA == 6);
+    }
+
+    bool isTieBreakFinished(const unsigned char scoreA, const unsigned char scoreB) {
+        return (scoreA >= 7 && scoreA - scoreB >= 2) ||
+               (scoreB >= 7 && scoreB - scoreA >= 2) ||
+               scoreA == 10 || scoreB == 10;
+    }
+
+    void computeGame(const Player scoringPlayer) {
+        auto& currentSet = summary.sets[summary.currentSet];
+
+        if (scoringPlayer == Player::PLAYER1) {
+            currentSet.scoreP1++;
+        } else {
+            currentSet.scoreP2++;
+        }
+
+        if (isTieBreakSet(currentSet.scoreP1, currentSet.scoreP2)) {
+            currentSet.isTieBreakActive = true;
+            return;
+        }
+
+        if (isSetFinished(currentSet.scoreP1, currentSet.scoreP2)) {
+            if (summary.currentSet < summary.sets.size() - 1) {
+                summary.currentSet++;
+                summary.sets[summary.currentSet].isActive = true;
+            } else {
+                // end of match!
+                return;
             }
-            winner.sets[i]++;
-            break;
         }
     }
 
-    void computeSet(PlayerScore& winner, PlayerScore& loser) {
-        (void)winner;
-        (void)loser;
-    }
-
-    std::vector<Event> events;
+    std::array<Event, 5> latestEvents;
+    MatchSummary summary{};
 };
+
+static constexpr auto TB_0 = "⁰";
+static constexpr auto TB_1 = "¹";
+static constexpr auto TB_2 = "²";
+static constexpr auto TB_3 = "³";
+static constexpr auto TB_4 = "⁴";
+static constexpr auto TB_5 = "⁵";
+static constexpr auto TB_6 = "⁶";
+static constexpr auto TB_7 = "⁷";
+static constexpr auto TB_8 = "⁸";
+static constexpr auto TB_9 = "⁹";
+
+static constexpr const char* TB[] = {
+        TB_0, TB_1, TB_2, TB_3, TB_4, TB_5, TB_6, TB_7, TB_8, TB_9
+};
+
+std::string makeTieBreakScoreString(unsigned char score) {
+    std::string s;
+    size_t lower_digit = score % 10;
+    s = TB[lower_digit];
+    if (score > 9) {
+        size_t higher_digit = (score - lower_digit)/10;
+        s = TB[higher_digit] + s;
+    }
+    return s;
+}
 
 
 namespace Pinetime::Applications::Screens {
@@ -167,7 +237,8 @@ namespace Pinetime::Applications::Screens {
     dateTimeController(dateTimeController),
     fs(fs),
     motorTimer(this, TimerCallback),
-    model(std::make_unique<TennisMatchModel>())
+    model(std::make_unique<TennisMatchModel>()),
+    matchStartInUptime(dateTimeController.Uptime())
     {
         const auto mainContainer = lv_cont_create(lv_scr_act(), nullptr);
         lv_obj_set_style_local_bg_color(mainContainer, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
@@ -214,7 +285,7 @@ namespace Pinetime::Applications::Screens {
         lv_obj_set_style_local_text_font(opLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &jetbrains_mono_bold_20);
         lv_obj_set_style_local_text_color(opLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
 
-        const auto timeLabel = lv_label_create(mainContainer, nullptr);
+        timeLabel = lv_label_create(mainContainer, nullptr);
         lv_label_set_text_static(timeLabel, "00:00");
         lv_obj_set_style_local_text_font(opLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &jetbrains_mono_bold_20);
         lv_obj_set_style_local_text_color(timeLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GRAY);
@@ -245,25 +316,21 @@ namespace Pinetime::Applications::Screens {
         lv_obj_set_style_local_text_color(opSetLabel, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
 
         for (auto i = 0; i < 5; i++) {
-            const auto setContainer = lv_cont_create(setsContainer, nullptr);
-            lv_obj_set_style_local_bg_color(setContainer, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
-            lv_cont_set_fit2(setContainer, LV_FIT_TIGHT, LV_FIT_TIGHT);
-            lv_cont_set_layout(setContainer, LV_LAYOUT_COLUMN_MID);
+            setContainers[i] = lv_cont_create(setsContainer, nullptr);
+            lv_obj_set_style_local_bg_color(setContainers[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+            lv_cont_set_fit2(setContainers[i], LV_FIT_TIGHT, LV_FIT_TIGHT);
+            lv_cont_set_layout(setContainers[i], LV_LAYOUT_COLUMN_MID);
 
-            meSetScoreLabel[i] = lv_label_create(setContainer, nullptr);
+            meSetScoreLabel[i] = lv_label_create(setContainers[i], nullptr);
             lv_label_set_text_static(meSetScoreLabel[i], "0");
             lv_obj_set_style_local_text_color(meSetScoreLabel[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GRAY);
 
-            opSetScoreLabel[i] = lv_label_create(setContainer, nullptr);
+            opSetScoreLabel[i] = lv_label_create(setContainers[i], nullptr);
             lv_label_set_text_static(opSetScoreLabel[i], "0");
             lv_obj_set_style_local_text_color(opSetScoreLabel[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GRAY);
-
-            if (i == 0) { // active set
-                lv_obj_set_style_local_pad_right(setContainer, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 5);
-                lv_obj_set_style_local_pad_left(setContainer, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 5);
-                lv_obj_set_style_local_bg_color(setContainer, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
-            }
         }
+
+        Refresh();
     }
 
     TennisScoreTracker::~TennisScoreTracker() {
@@ -275,15 +342,24 @@ namespace Pinetime::Applications::Screens {
     }
 
     bool TennisScoreTracker::OnTouchEvent(TouchEvents event) {
+        // This is a workaround. When the firmware is running
+        // on PineTime itself, it always gets a first tap event
+        // when it's loaded from the app list. So for now, we
+        // just reject the first tap.
+        if (event == TouchEvents::Tap && !firstEventRejected) {
+            firstEventRejected = true;
+            return false;
+        }
+
         if (event == TouchEvents::Tap ||
             event == TouchEvents::SwipeUp) {
-            model->registerPointForMe();
+            model->registerPoint(TennisMatchModel::Player::PLAYER1);
             Refresh();
             motorController.RunForDuration(30);
             return true;
         } else if (event == TouchEvents::DoubleTap ||
                    event == TouchEvents::SwipeDown) {
-            model->registerPointForOpp();
+            model->registerPoint(TennisMatchModel::Player::PLAYER2);
             motorController.RunForDuration(30);
             motorTimer.StartTimer(std::chrono::milliseconds(250));
             Refresh();
@@ -297,41 +373,69 @@ namespace Pinetime::Applications::Screens {
         return false;
     }
 
+    bool TennisScoreTracker::OnButtonPushed() {
+        // Horrible feeling when you're in a middle
+        // of a game and you press the button twice...
+        // This way we won't lose the current match
+        // state for now. A longer press returns to
+        // the watchface.
+        return true;
+    }
+
     void TennisScoreTracker::Refresh() {
-//        if (scoreLabel && model) {
-//            const auto summary = model->getMatchSummary();
-//            lv_label_set_text_fmt(scoreLabel, "game %d - %d\n"
-//                                              "set #1 %d - %d\n"
-//                                              "set #2 %d - %d\n"
-//                                              "set #3 %d - %d\n",
-//                                              (int) summary.myScore.currentGame,
-//                                              (int) summary.oppScore.currentGame,
-//                                              (int) summary.myScore.sets[0],
-//                                              (int) summary.oppScore.sets[0],
-//                                              (int) summary.myScore.sets[1],
-//                                              (int) summary.oppScore.sets[1],
-//                                              (int) summary.myScore.sets[2],
-//                                              (int) summary.oppScore.sets[2],
-//                                              0, 0);
-//        }
         const auto summary = model->getMatchSummary();
-        if (summary.myScore.currentGame == TennisMatchModel::GameScore::AD)
-        {
+        if (summary.sets[summary.currentSet].isTieBreakActive) {
+            lv_label_set_text_fmt(meGameScoreLabel, "%d", summary.sets[summary.currentSet].tieBreakScoreP1);
+            lv_label_set_text_fmt(opGameScoreLabel, "%d", summary.sets[summary.currentSet].tieBreakScoreP2);
+        } else if (summary.currentGameP1 == TennisMatchModel::GameScore::AD) {
             lv_label_set_text_static(meGameScoreLabel, "AD");
             lv_label_set_text_static(opGameScoreLabel, "-");
-        } else if (summary.oppScore.currentGame == TennisMatchModel::GameScore::AD)
-        {
+        } else if (summary.currentGameP2 == TennisMatchModel::GameScore::AD) {
             lv_label_set_text_static(meGameScoreLabel, "-");
             lv_label_set_text_static(opGameScoreLabel, "AD");
         } else {
-            lv_label_set_text_fmt(meGameScoreLabel, TennisMatchModel::gameScoreToString(summary.myScore.currentGame).c_str());
-            lv_label_set_text_fmt(opGameScoreLabel, TennisMatchModel::gameScoreToString(summary.oppScore.currentGame).c_str());
+            lv_label_set_text_fmt(meGameScoreLabel, TennisMatchModel::gameScoreToString(summary.currentGameP1).c_str());
+            lv_label_set_text_fmt(opGameScoreLabel, TennisMatchModel::gameScoreToString(summary.currentGameP2).c_str());
         }
 
-        for (auto i = 0; i < 5; i++)
-        {
-            lv_label_set_text_fmt(meSetScoreLabel[i], "%d", summary.myScore.sets[i]);
-            lv_label_set_text_fmt(opSetScoreLabel[i], "%d", summary.oppScore.sets[i]);
+        const auto matchDuration = dateTimeController.Uptime() - matchStartInUptime;
+
+        lv_label_set_text_fmt(timeLabel,
+                              "%02d:%02d %dm",
+                              dateTimeController.Hours(),
+                              dateTimeController.Minutes(),
+                              std::chrono::duration_cast<std::chrono::minutes>(matchDuration));
+
+        auto lastActiveSet = 0;
+        for (size_t i = 0; i < summary.sets.size(); i++) {
+            const auto& set = summary.sets[i];
+            if (set.isActive) {
+                lastActiveSet = i;
+                lv_obj_set_style_local_pad_right(setContainers[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 0);
+                lv_obj_set_style_local_pad_left(setContainers[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 0);
+                lv_obj_set_style_local_bg_color(setContainers[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+                lv_obj_set_style_local_text_color(meSetScoreLabel[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+                lv_obj_set_style_local_text_color(opSetScoreLabel[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+            } else {
+                lv_obj_set_style_local_pad_right(setContainers[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 0);
+                lv_obj_set_style_local_pad_left(setContainers[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 0);
+                lv_obj_set_style_local_bg_color(setContainers[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+                lv_obj_set_style_local_text_color(meSetScoreLabel[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GRAY);
+                lv_obj_set_style_local_text_color(opSetScoreLabel[i], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GRAY);
+            }
+
+            if (set.isTieBreakActive) {
+                const auto tieBreakScoreP1 = makeTieBreakScoreString(set.tieBreakScoreP1);
+                const auto tieBreakScoreP2 = makeTieBreakScoreString(set.tieBreakScoreP2);
+                lv_label_set_text_fmt(meSetScoreLabel[i], "%d%s", set.scoreP1, tieBreakScoreP1.data());
+                lv_label_set_text_fmt(opSetScoreLabel[i], "%d%s", set.scoreP2, tieBreakScoreP2.data());
+            } else {
+                lv_label_set_text_fmt(meSetScoreLabel[i], "%d", set.scoreP1);
+                lv_label_set_text_fmt(opSetScoreLabel[i], "%d", set.scoreP2);
+            }
         }
+        lv_obj_set_style_local_pad_right(setContainers[lastActiveSet], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 5);
+        lv_obj_set_style_local_pad_left(setContainers[lastActiveSet], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, 5);
+        lv_obj_set_style_local_bg_color(setContainers[lastActiveSet], LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
     }
 }
